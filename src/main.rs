@@ -23,7 +23,7 @@ async fn main() -> Result<(), io::Error> {
 
     let (tx, mut rx) = mpsc::unbounded_channel::<(usize, String)>();
 
-    let mut app = App::new();
+    let mut app = App::new(tx);
 
     while !app.should_quit {
         terminal.draw(|f| ui::render(f, &app))?;

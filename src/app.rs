@@ -1,3 +1,5 @@
+use tokio::sync::mpsc::UnboundedSender;
+
 use crate::pane::Pane;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,10 +28,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(tx: UnboundedSender<(usize, String)>) -> Self {
+        let first_pane = Pane::new(0, tx);
+
         Self {
             current_mode: Mode::Normal,
-            panes: vec![],
+            panes: vec![first_pane],
             active_pane_id: 0,
             command_buffer: String::new(),
             should_quit: false,
