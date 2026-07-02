@@ -21,7 +21,7 @@ async fn main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let (tx, mut rx) = mpsc::unbounded_channel::<(usize, String)>();
+    let (tx, mut rx) = mpsc::unbounded_channel::<(usize, Vec<u8>)>();
 
     let mut app = App::new(tx);
 
@@ -29,9 +29,9 @@ async fn main() -> Result<(), io::Error> {
         terminal.draw(|f| ui::render(f, &app))?;
 
         tokio::select! {
-            Some((pane_id, text)) = rx.recv() => {
+            Some((pane_id, data)) = rx.recv() => {
                 if let Some(pane) = app.panes.iter_mut().find(|p| p.id == pane_id) {
-                    pane.append_text(&text);
+                    pane.process_output(&data);
                 }
             }
             _ = tokio::time::sleep(std::time::Duration::from_millis(16)) => {

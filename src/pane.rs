@@ -2,17 +2,18 @@ use std::io::Write;
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use tokio::sync::mpsc::UnboundedSender;
+use vt100::Parser;
 
 pub struct Pane {
     pub id: usize,
     pub title: String,
-    pub buffer: Vec<String>,
+    pub parser: Parser,
     pub pty_writer: Box<dyn Write + Send>,
     pub is_focused: bool,
 }
 
 impl Pane {
-    pub fn new(id: usize, tx: UnboundedSender<(usize, String)>) -> Self {
+    pub fn new(id: usize, tx: UnboundedSender<(usize, Vec<u8>)>) -> Self {
         let pty_system = NativePtySystem::default();
         let pair = pty_system
             .openpty(PtySize {
@@ -37,8 +38,7 @@ impl Pane {
                 if n == 0 {
                     break;
                 }
-                let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                let _ = tx.send((id, text));
+                let _ = tx.send((id, buf[..n].to_vec()));
             }
         });
 
@@ -46,7 +46,7 @@ impl Pane {
             id,
             title: String::new(),
             is_focused: false,
-            buffer: vec![String::new()],
+            parser: Parser::new(24, 80, 0),
             pty_writer,
         }
     }
@@ -56,31 +56,7 @@ impl Pane {
         let _ = self.pty_writer.flush();
     }
 
-    pub fn append_text(&mut self, text: &str) {
-        let mut in_ansi_sequence = false;
-
-        for c in text.chars() {
-            if c == '\x1b' {
-                in_ansi_sequence = true;
-                continue;
-            }
-            if in_ansi_sequence {
-                if c.is_ascii_alphabetic() {
-                    in_ansi_sequence = false;
-                }
-                continue;
-            }
-
-            if c == '\n' {
-                self.buffer.push(String::new());
-            } else if c == '\r' {
-            } else if let Some(line) = self.buffer.last_mut() {
-                line.push(c);
-            }
-        }
-
-        if self.buffer.len() > 500 {
-            self.buffer.remove(0);
-        }
+    pub fn process_output(&mut self, data: &[u8]) {
+        self.parser.process(data);
     }
 }

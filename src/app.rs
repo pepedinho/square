@@ -28,7 +28,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(tx: UnboundedSender<(usize, String)>) -> Self {
+    pub fn new(tx: UnboundedSender<(usize, Vec<u8>)>) -> Self {
         let first_pane = Pane::new(0, tx);
 
         Self {
