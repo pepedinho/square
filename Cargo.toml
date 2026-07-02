@@ -1,0 +1,13 @@
+[package]
+name = "square"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+ratatui = "0.30.2"
+crossterm = { version = "0.27", features = ["event-stream"] }
+portable-pty = "0.8"
+mlua = { version = "0.9", features = ["lua54", "vendored"] }
+serde = { version = "1.0", features = ["derive"] } # Pour sérialiser les messages IPC
+serde_json = "1.0"
