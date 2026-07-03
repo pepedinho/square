@@ -54,8 +54,8 @@ pub fn render(f: &mut Frame, app: &App) {
                 Mode::Command => Color::LightMagenta,
             }));
 
-        let list = List::new(lines).block(pane_block);
-        f.render_widget(list, chunks[0]);
+        let paragraph = Paragraph::new(lines).block(pane_block);
+        f.render_widget(paragraph, chunks[0]);
 
         let (cur_row, cur_col) = screen.cursor_position();
 

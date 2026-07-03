@@ -47,7 +47,7 @@ impl Pane {
             id,
             title: String::new(),
             is_focused: false,
-            parser: Parser::new(24, 80, 0),
+            parser: Parser::new(rows, cols, 0),
             pty_writer,
             master_pty: pair.master,
         }
