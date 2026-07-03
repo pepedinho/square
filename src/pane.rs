@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use tokio::sync::mpsc::UnboundedSender;
 use vt100::Parser;
 
@@ -9,16 +9,17 @@ pub struct Pane {
     pub title: String,
     pub parser: Parser,
     pub pty_writer: Box<dyn Write + Send>,
+    pub master_pty: Box<dyn MasterPty + Send>,
     pub is_focused: bool,
 }
 
 impl Pane {
-    pub fn new(id: usize, tx: UnboundedSender<(usize, Vec<u8>)>) -> Self {
+    pub fn new(id: usize, tx: UnboundedSender<(usize, Vec<u8>)>, rows: u16, cols: u16) -> Self {
         let pty_system = NativePtySystem::default();
         let pair = pty_system
             .openpty(PtySize {
-                rows: 24,
-                cols: 80,
+                rows,
+                cols,
                 pixel_width: 0,
                 pixel_height: 0,
             })
@@ -48,6 +49,7 @@ impl Pane {
             is_focused: false,
             parser: Parser::new(24, 80, 0),
             pty_writer,
+            master_pty: pair.master,
         }
     }
 
@@ -58,5 +60,16 @@ impl Pane {
 
     pub fn process_output(&mut self, data: &[u8]) {
         self.parser.process(data);
+    }
+
+    pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.parser.screen_mut().set_size(rows, cols);
+
+        let _ = self.master_pty.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
     }
 }

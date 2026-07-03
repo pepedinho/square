@@ -1,13 +1,13 @@
 use std::io::{self, stdout};
 
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, prelude::CrosstermBackend};
 use square::{
-    app::{App, Mode},
+    app::{Action, App, Mode},
     input, ui,
 };
 use tokio::sync::mpsc;
@@ -23,7 +23,8 @@ async fn main() -> Result<(), io::Error> {
 
     let (tx, mut rx) = mpsc::unbounded_channel::<(usize, Vec<u8>)>();
 
-    let mut app = App::new(tx);
+    let size = terminal.size()?;
+    let mut app = App::new(tx, size.width, size.height);
 
     while !app.should_quit {
         terminal.draw(|f| ui::render(f, &app))?;
@@ -35,26 +36,34 @@ async fn main() -> Result<(), io::Error> {
                 }
             }
             _ = tokio::time::sleep(std::time::Duration::from_millis(16)) => {
-               if event::poll(std::time::Duration::from_secs(0))? {
-                if let Event::Key(key) = event::read()? {
-                    // CORRECTION : On ignore les événements de relâchement de touche (Release)
-                    if key.kind != event::KeyEventKind::Press {
+                if event::poll(std::time::Duration::from_secs(0))? {
+                    let ev = event::read()?;
+
+                    // 1. On gère le redimensionnement
+                    if let Event::Resize(w, h) = ev {
+                        app.handle_action(Action::ResizeTerminal(w, h));
                         continue;
                     }
 
-                    if app.current_mode == Mode::Command {
-                        match key.code {
-                            KeyCode::Char(c) => { app.command_buffer.push(c); continue; }
-                            KeyCode::Backspace => { app.command_buffer.pop(); continue; }
-                            _ => {}
+                    // 2. On gère le clavier
+                    if let Event::Key(key) = ev {
+                        if key.kind != KeyEventKind::Press {
+                            continue;
+                        }
+
+                        if app.current_mode == Mode::Command {
+                            match key.code {
+                                KeyCode::Char(c) => { app.command_buffer.push(c); continue; }
+                                KeyCode::Backspace => { app.command_buffer.pop(); continue; }
+                                _ => {}
+                            }
+                        }
+
+                        if let Some(action) = input::handle_key(key, app.current_mode) {
+                            app.handle_action(action);
                         }
                     }
-
-                    if let Some(action) = input::handle_key(key, app.current_mode) {
-                        app.handle_action(action);
-                    }
                 }
-                    }
             }
         }
     }

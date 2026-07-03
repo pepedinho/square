@@ -16,6 +16,7 @@ pub enum Action {
     ClosePane,
     ExecuteCommand(String),
     WriteToShell(String),
+    ResizeTerminal(u16, u16),
     Quit,
 }
 
@@ -28,8 +29,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(tx: UnboundedSender<(usize, Vec<u8>)>) -> Self {
-        let first_pane = Pane::new(0, tx);
+    pub fn new(tx: UnboundedSender<(usize, Vec<u8>)>, width: u16, height: u16) -> Self {
+        let inner_cols = width.saturating_sub(2);
+        let inner_rows = height.saturating_sub(3);
+
+        let first_pane = Pane::new(0, tx, inner_rows, inner_cols);
 
         Self {
             current_mode: Mode::Normal,
@@ -52,6 +56,14 @@ impl App {
             Action::WriteToShell(text) => {
                 if let Some(pane) = self.panes.iter_mut().find(|p| p.id == self.active_pane_id) {
                     pane.write_to_shell(&text);
+                }
+            }
+            Action::ResizeTerminal(w, h) => {
+                let inner_cols = w.saturating_sub(2);
+                let inner_rows = h.saturating_sub(3);
+
+                for pane in &mut self.panes {
+                    pane.resize(inner_rows, inner_cols);
                 }
             }
             Action::Quit => self.should_quit = true,
