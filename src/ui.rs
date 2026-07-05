@@ -34,7 +34,10 @@ pub fn render(f: &mut Frame, app: &App) {
                             style = style.add_modifier(Modifier::BOLD);
                         }
 
-                        spans.push(Span::styled(cell.contents().to_string(), style));
+                        let content = cell.contents();
+                        let text = if content.is_empty() { " " } else { content };
+
+                        spans.push(Span::styled(text.to_string(), style));
                     }
                 }
 
