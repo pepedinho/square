@@ -28,10 +28,26 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
 }
 
 fn handle_inser_mode(key: KeyEvent) -> Option<Action> {
+    #[allow(clippy::collapsible_if)]
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        if let KeyCode::Char(c) = key.code {
+            if c.is_ascii_alphabetic() {
+                let byte = c.to_ascii_lowercase() as u8 - b'a' + 1;
+                return Some(Action::WriteToShell(String::from_utf8(vec![byte]).unwrap()));
+            }
+        }
+    }
     match key.code {
         KeyCode::Char(c) => Some(Action::WriteToShell(c.to_string())),
-        KeyCode::Enter => Some(Action::WriteToShell("\n".to_string())),
+        KeyCode::Enter => Some(Action::WriteToShell("\r".to_string())),
         KeyCode::Backspace => Some(Action::WriteToShell("\u{7f}".to_string())),
+        KeyCode::Esc => Some(Action::WriteToShell("\x1b".to_string())),
+        KeyCode::Tab => Some(Action::WriteToShell("\t".to_string())),
+
+        KeyCode::Up => Some(Action::WriteToShell("\x1b[A".to_string())),
+        KeyCode::Down => Some(Action::WriteToShell("\x1b[B".to_string())),
+        KeyCode::Right => Some(Action::WriteToShell("\x1b[C".to_string())),
+        KeyCode::Left => Some(Action::WriteToShell("\x1b[D".to_string())),
         _ => None,
     }
 }

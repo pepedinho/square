@@ -1,10 +1,11 @@
 use std::io::{self, stdout};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{Event, EventStream, KeyCode, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use futures_util::StreamExt;
 use ratatui::{Terminal, prelude::CrosstermBackend};
 use square::{
     app::{Action, App, Mode},
@@ -25,27 +26,28 @@ async fn main() -> Result<(), io::Error> {
 
     let size = terminal.size()?;
     let mut app = App::new(tx, size.width, size.height);
+    let mut event_stream = EventStream::new();
 
     while !app.should_quit {
         terminal.draw(|f| ui::render(f, &app))?;
 
         tokio::select! {
-            Some((pane_id, data)) = rx.recv() => {
-                if let Some(pane) = app.panes.iter_mut().find(|p| p.id == pane_id) {
-                    pane.process_output(&data);
+            maybe_data = rx.recv() => {
+                if let Some((pane_id, data)) = maybe_data {
+                    if let Some(pane) = app.panes.iter_mut().find(|p| p.id == pane_id) {
+                        pane.process_output(&data);
+                    }
+                } else {
+                    break;
                 }
             }
-            _ = tokio::time::sleep(std::time::Duration::from_millis(16)) => {
-                if event::poll(std::time::Duration::from_secs(0))? {
-                    let ev = event::read()?;
-
-                    // 1. On gère le redimensionnement
+            maybe_event = event_stream.next() => {
+                if let Some(Ok(ev)) = maybe_event {
                     if let Event::Resize(w, h) = ev {
                         app.handle_action(Action::ResizeTerminal(w, h));
                         continue;
                     }
 
-                    // 2. On gère le clavier
                     if let Event::Key(key) = ev {
                         if key.kind != KeyEventKind::Press {
                             continue;
