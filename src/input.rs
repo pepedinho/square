@@ -20,6 +20,7 @@ pub fn handle_key(key: KeyEvent, current_mode: Mode) -> Option<Action> {
 fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
     match key.code {
         KeyCode::Char(':') => Some(Action::SwitchMode(Mode::Command)),
+        KeyCode::Char('i') => Some(Action::SwitchMode(Mode::Insert)),
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('v') => Some(Action::SplitVertical),
         KeyCode::Char('h') => Some(Action::SplitHorizontal),

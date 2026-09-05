@@ -21,6 +21,7 @@ pub enum Action {
 }
 
 pub struct App {
+    /// 
     pub current_mode: Mode,
     pub panes: Vec<Pane>,
     pub active_pane_id: usize,
@@ -67,6 +68,9 @@ impl App {
                 }
             }
             Action::Quit => self.should_quit = true,
+            Action::SplitVertical => {
+                if let Some(pane) = self.panes
+            }
             _ => unimplemented!(),
         }
     }

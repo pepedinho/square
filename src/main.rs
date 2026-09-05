@@ -11,7 +11,7 @@ use square::{
     app::{Action, App, Mode},
     input, ui,
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time};
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
@@ -28,6 +28,9 @@ async fn main() -> Result<(), io::Error> {
     let mut app = App::new(tx, size.width, size.height);
     let mut event_stream = EventStream::new();
 
+    let mut render_interval = time::interval(time::Duration::from_millis(16));
+    let mut needs_render = false;
+
     while !app.should_quit {
         terminal.draw(|f| ui::render(f, &app))?;
 
@@ -36,6 +39,7 @@ async fn main() -> Result<(), io::Error> {
                 if let Some((pane_id, data)) = maybe_data {
                     if let Some(pane) = app.panes.iter_mut().find(|p| p.id == pane_id) {
                         pane.process_output(&data);
+                        needs_render = true;
                     }
                 } else {
                     break;
@@ -65,8 +69,17 @@ async fn main() -> Result<(), io::Error> {
                             app.handle_action(action);
                         }
                     }
+                    needs_render = true;
                 }
             }
+
+            _ = render_interval.tick() => {
+            if needs_render {
+                terminal.draw(|f| ui::render(f, &app))?;
+                needs_render = false;
+            }
+        }
+
         }
     }
 
