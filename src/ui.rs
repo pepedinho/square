@@ -8,6 +8,22 @@ use ratatui::{
 
 use crate::app::{App, Mode};
 
+/// Render the full UI for one frame.
+///
+/// Layout (top to bottom):
+///
+/// ```text
+/// ┌─ SQUARE - Pane 0 [Normal] ─┐
+/// │  terminal content            │
+/// │  ...                         │
+/// └──────────────────────────────┘
+///  -- NORMAL --
+/// ```
+///
+/// The border color reflects the current [`Mode`]:
+/// - **Normal** → light blue
+/// - **Insert** → light green
+/// - **Command** → light magenta
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -83,6 +99,7 @@ pub fn render(f: &mut Frame, app: &App) {
     f.render_widget(bottom_text, chunks[1]);
 }
 
+/// Convert a [`vt100::Color`] to the closest [`ratatui::style::Color`].
 fn vt100_color_to_ratatui(color: vt100::Color) -> Color {
     match color {
         vt100::Color::Default => Color::Reset,

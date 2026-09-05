@@ -1,3 +1,12 @@
+//! Binary entry point.
+//!
+//! Sets up the terminal (raw mode + alternate screen), then runs the async
+//! event loop with `tokio::select!`:
+//!
+//! - PTY output arrives on an unbounded `mpsc` channel `(pane_id, Vec<u8>)`.
+//! - Key events arrive via [`crossterm::EventStream`].
+//! - A render tick fires every 16 ms (~60 FPS) and redraws only when dirty.
+
 use std::io::{self, stdout};
 
 use crossterm::{
@@ -13,6 +22,16 @@ use square::{
 };
 use tokio::{sync::mpsc, time};
 
+/// Application entry point.
+///
+/// 1. Enable raw mode and switch to the alternate screen.
+/// 2. Create the `App` with its initial pane and the PTY output channel.
+/// 3. Loop until `App::should_quit`:
+///    - ~60 FPS render interval (16 ms), redrawing only when `needs_render`.
+///    - Feed PTY output from the channel into the matching pane's parser.
+///    - Translate key events into [`square::app::Action`]s via `square::input::handle_key`.
+///    - Accumulate characters into `App::command_buffer` while in Command mode.
+/// 4. Restore the terminal (leave alternate screen, exit raw mode).
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     enable_raw_mode()?;

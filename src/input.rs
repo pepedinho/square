@@ -2,6 +2,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{Action, Mode};
 
+/// Translates a single [`KeyEvent`] into an [`Action`] based on `current_mode`.
+///
+/// `Ctrl+N` is intercepted globally and toggles between Insert and the other modes.
+/// Everything else is delegated to the mode-specific handler.
 pub fn handle_key(key: KeyEvent, current_mode: Mode) -> Option<Action> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('n') {
         return match current_mode {
@@ -17,6 +21,15 @@ pub fn handle_key(key: KeyEvent, current_mode: Mode) -> Option<Action> {
     }
 }
 
+/// Normal-mode key bindings:
+///
+/// | Key | Action |
+/// |-----|--------|
+/// | `:` | Enter Command mode |
+/// | `i` | Enter Insert mode |
+/// | `q` | Quit |
+/// | `v` | Split vertically (not yet implemented) |
+/// | `h` | Split horizontally (not yet implemented) |
 fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
     match key.code {
         KeyCode::Char(':') => Some(Action::SwitchMode(Mode::Command)),
@@ -28,6 +41,11 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
     }
 }
 
+/// Insert-mode key handler.
+///
+/// `Ctrl+<letter>` sends the corresponding control byte (`\x01`–`\x1a`).
+/// All other keys are converted to the byte sequence a real terminal would
+/// receive (e.g. arrow keys become VT100 escape sequences).
 fn handle_inser_mode(key: KeyEvent) -> Option<Action> {
     #[allow(clippy::collapsible_if)]
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -53,6 +71,11 @@ fn handle_inser_mode(key: KeyEvent) -> Option<Action> {
     }
 }
 
+/// Command-mode key handler.
+///
+/// `Esc` cancels and returns to Normal mode.
+/// `Enter` currently just returns to Normal mode — the command buffer is
+/// **not** dispatched yet (see the `TODO` in the body).
 fn handle_command_mode(key: KeyEvent) -> Option<Action> {
     match key.code {
         KeyCode::Esc => Some(Action::SwitchMode(Mode::Normal)),
