@@ -92,4 +92,7 @@ impl Pane {
             pixel_height: 0,
         });
     }
+
+    pub fn split(&mut self) {
+    }
 }

@@ -1,3 +1,4 @@
+use futures_util::future::select;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::pane::Pane;
@@ -78,6 +79,20 @@ impl App {
         }
     }
 
+    /// Look up the pane whose `id` matches [`active_pane_id`](Self::active_pane_id).
+    ///
+    /// Returns `None` if no pane has that id.
+    pub fn get_current_pane(&self) -> Option<&Pane> {
+        self.panes.iter().find(|p| p.id == self.active_pane_id)
+    }
+
+    /// Mutable counterpart of [`get_current_pane`](Self::get_current_pane).
+    ///
+    /// Use this when the active pane need to be mutated (e.g. `write_to_shell`).
+    pub fn get_current_pane_mut(&mut self) -> Option<&mut Pane> {
+        self.panes.iter_mut().find(|p| p.id == self.active_pane_id)
+    }
+
     /// The single entry-point for all state changes.
     ///
     /// Dispatches the given [`Action`] and mutates `self` accordingly.
@@ -91,7 +106,7 @@ impl App {
                 }
             }
             Action::WriteToShell(text) => {
-                if let Some(pane) = self.panes.iter_mut().find(|p| p.id == self.active_pane_id) {
+                if let Some(pane) = self.get_current_pane_mut() {
                     pane.write_to_shell(&text);
                 }
             }
@@ -103,6 +118,9 @@ impl App {
                     pane.resize(inner_rows, inner_cols);
                 }
             }
+            Action::SplitVertical => if let Some(pane) = self.get_current_pane_mut() {
+                pane.spl
+            },
             Action::Quit => self.should_quit = true,
             _ => unimplemented!(),
         }
