@@ -1,14 +1,9 @@
 use std::io::Write;
 
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
-use ratatui::layout::Size;
+use ratatui::layout::{Rect, Size};
 use tokio::sync::mpsc::UnboundedSender;
 use vt100::Parser;
-
-pub enum Direction {
-    Vertical,
-    Horizontal,
-}
 
 /// A single terminal pane.
 ///
@@ -30,6 +25,8 @@ pub struct Pane {
     pub is_focused: bool,
     /// Size of pane.
     pub size: Size,
+    /// Corresonding ratatui [`Rect`]
+    pub rect: Rect,
 }
 
 impl Pane {
@@ -76,6 +73,7 @@ impl Pane {
             pty_writer,
             master_pty: pair.master,
             size: Size::new(cols, rows),
+            rect: Rect::new(0, 0, cols, rows),
         }
     }
 
@@ -100,6 +98,11 @@ impl Pane {
             pixel_width: 0,
             pixel_height: 0,
         });
+    }
+
+    pub fn set_rect(&mut self, rect: Rect) {
+        self.rect = rect;
+        self.resize(rect.height, rect.width);
     }
 
     pub fn split(&mut self) {}

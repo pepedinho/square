@@ -56,7 +56,7 @@ async fn main() -> Result<(), io::Error> {
         tokio::select! {
             maybe_data = rx.recv() => {
                 if let Some((pane_id, data)) = maybe_data {
-                    if let Some(pane) = app.panes.iter_mut().find(|p| p.id == pane_id) {
+                    if let Some(pane) = app.root.find_leaf_mut(pane_id) {
                         pane.process_output(&data);
                         needs_render = true;
                     }

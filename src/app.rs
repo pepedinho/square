@@ -1,7 +1,8 @@
-use ratatui::layout::Size;
+use ratatui::layout::{Rect, Size};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::pane::{Direction, Pane};
+use crate::pane::Pane;
+use crate::tree::{Direction, Node};
 
 /// Editor interaction modes, inspired by Vim.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,9 +21,9 @@ pub enum Mode {
 pub enum Action {
     /// Switch to the given [`Mode`].
     SwitchMode(Mode),
-    /// Split the active pane vertically (not yet implemented).
+    /// Split the active pane vertically.
     SplitVertical,
-    /// Split the active pane horizontally (not yet implemented).
+    /// Split the active pane horizontally.
     SplitHorizontal,
     /// Close the active pane (not yet implemented).
     ClosePane,
@@ -38,14 +39,14 @@ pub enum Action {
 
 /// Central application state.
 ///
-/// Holds the list of panes, the active pane id, the current [`Mode`],
+/// Holds the pane split tree, the active pane id, the current [`Mode`],
 /// and the command-mode input buffer. The only way to mutate this struct
 /// from outside the module is through [`handle_action`](Self::handle_action).
 pub struct App {
     /// Current interaction mode.
     pub current_mode: Mode,
-    /// All open panes.
-    pub panes: Vec<Pane>,
+    /// Root of the pane split tree.
+    pub root: Node,
     /// Id of the pane that currently receives input.
     pub active_pane_id: usize,
     /// Text accumulated while in [`Mode::Command`].
@@ -72,11 +73,12 @@ impl App {
         let inner_cols = size.width.saturating_sub(2);
         let inner_rows = size.height.saturating_sub(3);
 
-        let first_pane = Pane::new(0, tx.clone(), inner_rows, inner_cols);
+        let mut root = Node::Leaf(Pane::new(0, tx.clone(), inner_rows, inner_cols));
+        root.layout(Rect::new(0, 0, inner_cols, inner_rows));
 
         Self {
             current_mode: Mode::Normal,
-            panes: vec![first_pane],
+            root,
             active_pane_id: 0,
             command_buffer: String::new(),
             should_quit: false,
@@ -90,36 +92,14 @@ impl App {
         let inner_cols = size.width.saturating_sub(2);
         let inner_rows = size.height.saturating_sub(3);
 
-        for pane in &mut self.panes {
-            pane.resize(inner_rows, inner_cols);
-        }
+        self.root.layout(Rect::new(0, 0, inner_cols, inner_rows));
     }
 
     /// Split the current active pane by the [`Direction`] provided in methods arguments.
     pub fn split(&mut self, direction: Direction) {
-        // Get the new size and resize current active pane
-        let new_pane_size = if let Some(pane) = self.get_current_pane_mut() {
-            let pane_size = pane.size;
-
-            let new_size = match direction {
-                Direction::Vertical => Size::new(pane_size.width / 2, pane_size.height),
-                Direction::Horizontal => Size::new(pane_size.width, pane_size.height / 2),
-            };
-
-            pane.resize(new_size.height, new_size.width);
-            new_size
-        } else {
-            return;
-        };
-
-        // Create new pane
-        let new_pane = Pane::new(
-            self.next_id(),
-            self.tx.clone(),
-            new_pane_size.height,
-            new_pane_size.width,
-        );
-        self.panes.push(new_pane);
+        let new_id = self.next_id();
+        self.root
+            .split_active(self.active_pane_id, direction, self.tx.clone(), new_id);
     }
 
     /// Increment the [`next_id`](Self::next_id) counter.
@@ -141,20 +121,20 @@ impl App {
     ///
     /// Returns `None` if no pane has that id.
     pub fn get_current_pane(&self) -> Option<&Pane> {
-        self.panes.iter().find(|p| p.id == self.active_pane_id)
+        self.root.find_leaf(self.active_pane_id)
     }
 
     /// Mutable counterpart of [`get_current_pane`](Self::get_current_pane).
     ///
     /// Use this when the active pane need to be mutated (e.g. `write_to_shell`).
     pub fn get_current_pane_mut(&mut self) -> Option<&mut Pane> {
-        self.panes.iter_mut().find(|p| p.id == self.active_pane_id)
+        self.root.find_leaf_mut(self.active_pane_id)
     }
 
     /// The single entry-point for all state changes.
     ///
     /// Dispatches the given [`Action`] and mutates `self` accordingly.
-    /// Split, close, and command-execution actions are currently stubbed.
+    /// Close and command-execution actions are currently stubbed.
     pub fn handle_action(&mut self, action: Action) {
         match action {
             Action::SwitchMode(new_mode) => {
@@ -168,24 +148,9 @@ impl App {
                     pane.write_to_shell(&text);
                 }
             }
-            Action::ResizeTerminal(w, h) => {
-                let inner_cols = w.saturating_sub(2);
-                let inner_rows = h.saturating_sub(3);
-
-                for pane in &mut self.panes {
-                    pane.resize(inner_rows, inner_cols);
-                }
-            }
-            Action::SplitVertical => {
-                if let Some(_pane) = self.get_current_pane() {
-                    self.split(Direction::Vertical);
-                }
-            }
-            Action::SplitHorizontal => {
-                if let Some(_pane) = self.get_current_pane() {
-                    self.split(Direction::Horizontal);
-                }
-            }
+            Action::ResizeTerminal(w, h) => self.update(Size::new(w, h)),
+            Action::SplitVertical => self.split(Direction::Vertical),
+            Action::SplitHorizontal => self.split(Direction::Horizontal),
             Action::Quit => self.should_quit = true,
             _ => unimplemented!(),
         }
