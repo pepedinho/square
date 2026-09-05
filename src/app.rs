@@ -1,7 +1,7 @@
-use futures_util::future::select;
+use ratatui::layout::Size;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::pane::Pane;
+use crate::pane::{Direction, Pane};
 
 /// Editor interaction modes, inspired by Vim.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -52,6 +52,10 @@ pub struct App {
     pub command_buffer: String,
     /// When `true` the main event loop exits on the next iteration.
     pub should_quit: bool,
+    /// Clone of the sender channel, shared by every pane's reader thread.
+    tx: UnboundedSender<(usize, Vec<u8>)>,
+    /// Monotonic counter for pane ids (safer than `panes.len()` once panes can close).
+    next_id: usize,
 }
 
 impl App {
@@ -64,11 +68,11 @@ impl App {
     /// The inner area is calculated as:
     /// - columns = `width - 2` (1-col border on each side)
     /// - rows    = `height - 3` (1-row title bar + 1-row status bar + 1-row border)
-    pub fn new(tx: UnboundedSender<(usize, Vec<u8>)>, width: u16, height: u16) -> Self {
-        let inner_cols = width.saturating_sub(2);
-        let inner_rows = height.saturating_sub(3);
+    pub fn new(tx: UnboundedSender<(usize, Vec<u8>)>, size: Size) -> Self {
+        let inner_cols = size.width.saturating_sub(2);
+        let inner_rows = size.height.saturating_sub(3);
 
-        let first_pane = Pane::new(0, tx, inner_rows, inner_cols);
+        let first_pane = Pane::new(0, tx.clone(), inner_rows, inner_cols);
 
         Self {
             current_mode: Mode::Normal,
@@ -76,7 +80,61 @@ impl App {
             active_pane_id: 0,
             command_buffer: String::new(),
             should_quit: false,
+            tx,
+            next_id: 1,
         }
+    }
+
+    /// Update pane size according with terminal window size
+    pub fn update(&mut self, size: Size) {
+        let inner_cols = size.width.saturating_sub(2);
+        let inner_rows = size.height.saturating_sub(3);
+
+        for pane in &mut self.panes {
+            pane.resize(inner_rows, inner_cols);
+        }
+    }
+
+    /// Split the current active pane by the [`Direction`] provided in methods arguments.
+    pub fn split(&mut self, direction: Direction) {
+        // Get the new size and resize current active pane
+        let new_pane_size = if let Some(pane) = self.get_current_pane_mut() {
+            let pane_size = pane.size;
+
+            let new_size = match direction {
+                Direction::Vertical => Size::new(pane_size.width / 2, pane_size.height),
+                Direction::Horizontal => Size::new(pane_size.width, pane_size.height / 2),
+            };
+
+            pane.resize(new_size.height, new_size.width);
+            new_size
+        } else {
+            return;
+        };
+
+        // Create new pane
+        let new_pane = Pane::new(
+            self.next_id(),
+            self.tx.clone(),
+            new_pane_size.height,
+            new_pane_size.width,
+        );
+        self.panes.push(new_pane);
+    }
+
+    /// Increment the [`next_id`](Self::next_id) counter.
+    ///
+    /// Return the id before incrementation.
+    ///
+    /// # Examples
+    /// ```
+    ///     assert_eq!(1, self.next_id()); // after this call the internal next_id is equal to 2
+    ///     assert_eq!(2, self.next_id());
+    /// ```
+    fn next_id(&mut self) -> usize {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
 
     /// Look up the pane whose `id` matches [`active_pane_id`](Self::active_pane_id).
@@ -118,9 +176,16 @@ impl App {
                     pane.resize(inner_rows, inner_cols);
                 }
             }
-            Action::SplitVertical => if let Some(pane) = self.get_current_pane_mut() {
-                pane.spl
-            },
+            Action::SplitVertical => {
+                if let Some(_pane) = self.get_current_pane() {
+                    self.split(Direction::Vertical);
+                }
+            }
+            Action::SplitHorizontal => {
+                if let Some(_pane) = self.get_current_pane() {
+                    self.split(Direction::Horizontal);
+                }
+            }
             Action::Quit => self.should_quit = true,
             _ => unimplemented!(),
         }

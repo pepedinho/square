@@ -43,7 +43,8 @@ async fn main() -> Result<(), io::Error> {
 
     let (tx, mut rx) = mpsc::unbounded_channel::<(usize, Vec<u8>)>();
 
-    let mut app = App::new(tx, size.width, size.height);
+    let size = terminal.size()?;
+    let mut app = App::new(tx, size);
     let mut event_stream = EventStream::new();
 
     let mut render_interval = time::interval(time::Duration::from_millis(16));

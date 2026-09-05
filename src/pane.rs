@@ -1,8 +1,14 @@
 use std::io::Write;
 
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
+use ratatui::layout::Size;
 use tokio::sync::mpsc::UnboundedSender;
 use vt100::Parser;
+
+pub enum Direction {
+    Vertical,
+    Horizontal,
+}
 
 /// A single terminal pane.
 ///
@@ -22,6 +28,8 @@ pub struct Pane {
     pub master_pty: Box<dyn MasterPty + Send>,
     /// Whether this pane currently has focus (not yet wired up for multi-pane).
     pub is_focused: bool,
+    /// Size of pane.
+    pub size: Size,
 }
 
 impl Pane {
@@ -67,6 +75,7 @@ impl Pane {
             parser: Parser::new(rows, cols, 0),
             pty_writer,
             master_pty: pair.master,
+            size: Size::new(cols, rows),
         }
     }
 
@@ -93,6 +102,5 @@ impl Pane {
         });
     }
 
-    pub fn split(&mut self) {
-    }
+    pub fn split(&mut self) {}
 }

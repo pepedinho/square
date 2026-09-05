@@ -1413,6 +1413,7 @@ dependencies = [
 name = "square"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crossterm 0.27.0",
  "futures-util",
  "portable-pty",
