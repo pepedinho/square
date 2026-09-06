@@ -98,6 +98,8 @@ impl Pane {
             pixel_width: 0,
             pixel_height: 0,
         });
+
+        self.size = Size::new(cols, rows);
     }
 
     pub fn set_rect(&mut self, rect: Rect) {
@@ -106,4 +108,97 @@ impl Pane {
     }
 
     pub fn split(&mut self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
+
+    /// A [`Write`] sink that records everything written to it.
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Capture {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Build a real pane (spawns a shell + reader thread) sized `rows`×`cols`.
+    fn pane(id: usize, rows: u16, cols: u16) -> Pane {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        Pane::new(id, tx, rows, cols)
+    }
+
+    #[test]
+    fn new_sets_id_and_size() {
+        let pane = pane(7, 10, 20);
+        assert_eq!(pane.id, 7);
+        assert_eq!(pane.rect, Rect::new(0, 0, 20, 10));
+        assert_eq!(pane.size, Size::new(20, 10));
+        assert_eq!(pane.parser.screen().size(), (10, 20));
+    }
+
+    #[test]
+    fn process_output_fills_cells_and_moves_cursor() {
+        let mut pane = pane(0, 5, 20);
+        pane.process_output(b"hey");
+
+        let screen = pane.parser.screen();
+        assert_eq!(screen.size(), (5, 20));
+        assert_eq!(screen.cell(0, 0).unwrap().contents(), "h");
+        assert_eq!(screen.cell(0, 1).unwrap().contents(), "e");
+        assert_eq!(screen.cell(0, 2).unwrap().contents(), "y");
+        assert_eq!(screen.cursor_position(), (0, 3));
+    }
+
+    #[test]
+    fn process_output_scrolls_when_filling_the_screen() {
+        let mut pane = pane(0, 3, 10);
+        pane.process_output(b"1\n2\n3\n4\n");
+
+        let screen = pane.parser.screen();
+        // Line feeds move the cursor down without resetting the column, so
+        // the digits end up staggered; once the buffer is full it scrolls.
+        assert_eq!(screen.cell(0, 2).unwrap().contents(), "3");
+        assert_eq!(screen.cell(1, 3).unwrap().contents(), "4");
+        assert_eq!(screen.cell(0, 0).unwrap().contents(), "");
+        assert_eq!(screen.cursor_position(), (2, 4));
+    }
+
+    #[test]
+    fn resize_updates_parser_screen_and_size() {
+        let mut pane = pane(0, 24, 80);
+        pane.resize(10, 40);
+
+        assert_eq!(pane.parser.screen().size(), (10, 40));
+        assert_eq!(pane.size, Size::new(40, 10));
+    }
+
+    #[test]
+    fn set_rect_syncs_rect_and_parser_size() {
+        let mut pane = pane(0, 24, 80);
+        pane.set_rect(Rect::new(3, 4, 15, 6));
+
+        assert_eq!(pane.rect, Rect::new(3, 4, 15, 6));
+        assert_eq!(pane.parser.screen().size(), (6, 15));
+    }
+
+    #[test]
+    fn write_to_shell_forwards_bytes_to_pty_writer() {
+        let mut pane = pane(0, 5, 10);
+        let capture = Capture::default();
+        pane.pty_writer = Box::new(capture.clone());
+
+        pane.write_to_shell("abc");
+        assert_eq!(*capture.0.lock().unwrap(), b"abc");
+    }
 }

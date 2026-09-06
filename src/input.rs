@@ -87,3 +87,138 @@ fn handle_command_mode(key: KeyEvent) -> Option<Action> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn ctrl(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::CONTROL)
+    }
+
+    #[test]
+    fn ctrl_n_toggles_between_insert_and_the_other_modes() {
+        let ctrl_n = ctrl(KeyCode::Char('n'));
+
+        assert_eq!(
+            handle_key(ctrl_n, Mode::Insert),
+            Some(Action::SwitchMode(Mode::Normal))
+        );
+        assert_eq!(
+            handle_key(ctrl_n, Mode::Normal),
+            Some(Action::SwitchMode(Mode::Insert))
+        );
+        assert_eq!(
+            handle_key(ctrl_n, Mode::Command),
+            Some(Action::SwitchMode(Mode::Insert))
+        );
+    }
+
+    #[test]
+    fn normal_mode_bindings() {
+        let cases = [
+            (key(KeyCode::Char(':')), Action::SwitchMode(Mode::Command)),
+            (key(KeyCode::Char('i')), Action::SwitchMode(Mode::Insert)),
+            (key(KeyCode::Char('q')), Action::Quit),
+            (key(KeyCode::Char('v')), Action::SplitVertical),
+            (key(KeyCode::Char('h')), Action::SplitHorizontal),
+        ];
+
+        for (key_event, expected) in cases {
+            assert_eq!(handle_key(key_event, Mode::Normal), Some(expected));
+        }
+
+        assert_eq!(handle_key(key(KeyCode::Char('x')), Mode::Normal), None);
+    }
+
+    #[test]
+    fn insert_mode_maps_printables_and_special_keys() {
+        assert_eq!(
+            handle_key(key(KeyCode::Char('a')), Mode::Insert),
+            Some(Action::WriteToShell("a".to_string()))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Enter), Mode::Insert),
+            Some(Action::WriteToShell("\r".to_string()))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Backspace), Mode::Insert),
+            Some(Action::WriteToShell("\u{7f}".to_string()))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Tab), Mode::Insert),
+            Some(Action::WriteToShell("\t".to_string()))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Esc), Mode::Insert),
+            Some(Action::WriteToShell("\x1b".to_string()))
+        );
+    }
+
+    #[test]
+    fn insert_mode_maps_arrow_keys_to_vt100_sequences() {
+        let cases = [
+            (KeyCode::Up, "\x1b[A"),
+            (KeyCode::Down, "\x1b[B"),
+            (KeyCode::Right, "\x1b[C"),
+            (KeyCode::Left, "\x1b[D"),
+        ];
+
+        for (code, expected) in cases {
+            assert_eq!(
+                handle_key(key(code), Mode::Insert),
+                Some(Action::WriteToShell(expected.to_string()))
+            );
+        }
+    }
+
+    #[test]
+    fn insert_mode_maps_control_letters_to_control_bytes() {
+        assert_eq!(
+            handle_key(ctrl(KeyCode::Char('a')), Mode::Insert),
+            Some(Action::WriteToShell("\x01".to_string()))
+        );
+        assert_eq!(
+            handle_key(ctrl(KeyCode::Char('z')), Mode::Insert),
+            Some(Action::WriteToShell("\x1a".to_string()))
+        );
+        assert_eq!(
+            handle_key(ctrl(KeyCode::Char('A')), Mode::Insert),
+            Some(Action::WriteToShell("\x01".to_string()))
+        );
+    }
+
+    #[test]
+    fn ctrl_n_takes_precedence_over_control_byte_mapping() {
+        let ctrl_n = ctrl(KeyCode::Char('n'));
+        assert_eq!(
+            handle_key(ctrl_n, Mode::Insert),
+            Some(Action::SwitchMode(Mode::Normal))
+        );
+    }
+
+    #[test]
+    fn ctrl_non_letters_fall_through() {
+        assert_eq!(
+            handle_key(key(KeyCode::Char('n')), Mode::Insert),
+            Some(Action::WriteToShell("n".to_string()))
+        );
+    }
+
+    #[test]
+    fn command_mode_bindings() {
+        assert_eq!(
+            handle_key(key(KeyCode::Esc), Mode::Command),
+            Some(Action::SwitchMode(Mode::Normal))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Enter), Mode::Command),
+            Some(Action::SwitchMode(Mode::Normal))
+        );
+        assert_eq!(handle_key(key(KeyCode::Char('l')), Mode::Command), None);
+    }
+}
