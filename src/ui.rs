@@ -85,7 +85,7 @@ fn draw_pane(f: &mut Frame, pane: &Pane, active: bool, mode: Mode) {
                     let content = cell.contents();
                     let text = if content.is_empty() { " " } else { content };
 
-                    spans.push(Span::styled(text.to_string(), style));
+                    spans.push(Span::raw(text).style(style));
                 }
             }
 
@@ -119,7 +119,7 @@ fn draw_pane(f: &mut Frame, pane: &Pane, active: bool, mode: Mode) {
 
     if active {
         let (cur_row, cur_col) = screen.cursor_position();
-        f.set_cursor_position((rect.x + cur_col, rect.y + cur_row));
+        f.set_cursor_position((outer.x + 1 + cur_col, outer.y + 1 + cur_row));
     }
 }
 

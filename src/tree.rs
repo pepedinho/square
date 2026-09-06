@@ -13,6 +13,7 @@ pub enum Direction {
 }
 
 /// Recursive pane tree.
+#[allow(clippy::large_enum_variant)]
 #[derive(Default)]
 pub enum Node {
     /// Transient placeholder used by  [`std::mem::take`] during split surgery.

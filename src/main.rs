@@ -48,11 +48,9 @@ async fn main() -> Result<(), io::Error> {
     let mut event_stream = EventStream::new();
 
     let mut render_interval = time::interval(time::Duration::from_millis(16));
-    let mut needs_render = false;
+    let mut needs_render = true;
 
     while !app.should_quit {
-        terminal.draw(|f| ui::render(f, &app))?;
-
         tokio::select! {
             maybe_data = rx.recv() => {
                 if let Some((pane_id, data)) = maybe_data {
@@ -68,6 +66,7 @@ async fn main() -> Result<(), io::Error> {
                 if let Some(Ok(ev)) = maybe_event {
                     if let Event::Resize(w, h) = ev {
                         app.handle_action(Action::ResizeTerminal(w, h));
+                        needs_render = true;
                         continue;
                     }
 
@@ -94,7 +93,9 @@ async fn main() -> Result<(), io::Error> {
 
             _ = render_interval.tick() => {
             if needs_render {
+                terminal.hide_cursor()?;
                 terminal.draw(|f| ui::render(f, &app))?;
+                terminal.show_cursor()?;
                 needs_render = false;
             }
         }
