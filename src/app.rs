@@ -104,13 +104,8 @@ impl App {
 
     /// Increment the [`next_id`](Self::next_id) counter.
     ///
-    /// Return the id before incrementation.
-    ///
-    /// # Examples
-    /// ```
-    ///     assert_eq!(1, self.next_id()); // after this call the internal next_id is equal to 2
-    ///     assert_eq!(2, self.next_id());
-    /// ```
+    /// Returns the id before incrementation, so the first call returns `1`
+    /// and leaves the internal counter at `2`.
     fn next_id(&mut self) -> usize {
         let id = self.next_id;
         self.next_id += 1;
